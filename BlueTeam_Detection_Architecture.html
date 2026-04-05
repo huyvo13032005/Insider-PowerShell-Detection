@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blue Team Detection Architecture — Insider Threat Lab</title>
+<style>
+:root {
+  --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+  --border: #30363d; --border2: #484f58;
+  --text: #e6edf3; --text2: #8b949e; --text3: #6e7681;
+  --blue: #58a6ff; --blue-bg: #1f3a5a; --blue-dark: #1158cc;
+  --green: #3fb950; --green-bg: #1a3a22; --green-dark: #2da44e;
+  --amber: #d29922; --amber-bg: #3a2d0a; --amber-dark: #9e6a03;
+  --red: #f85149; --red-bg: #3d1c1c; --red-dark: #b91c1c;
+  --purple: #a371f7; --purple-bg: #2d1b5e; --purple-dark: #6639ba;
+  --teal: #39d353; --cyan: #56d364;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  --radius: 6px; --radius-lg: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.6; }
+.container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+/* Header */
+.report-header { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 32px; position: relative; overflow: hidden; }
+.report-header::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(88,166,255,0.06) 0%, transparent 60%); pointer-events: none; }
+.report-header h1 { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+.report-header .subtitle { color: var(--text2); margin-top: 6px; font-size: 13px; }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+.badge-blue { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+.badge-green { background: var(--green-bg); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+.badge-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(210,153,34,0.3); }
+.badge-red { background: var(--red-bg); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+.badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(163,113,247,0.3); }
+
+/* Sections */
+.section { margin-bottom: 40px; }
+.section-title { font-size: 18px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.section-num { background: var(--blue-bg); color: var(--blue); font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; min-width: 28px; text-align: center; }
+
+/* Subsections */
+.subsection { margin-bottom: 24px; }
+.subsection-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: var(--bg3); color: var(--text2); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+tbody td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+.mono { font-family: var(--font-mono); font-size: 12px; color: var(--blue); }
+.mono-green { font-family: var(--font-mono); font-size: 12px; color: var(--green); }
+.mono-amber { font-family: var(--font-mono); font-size: 12px; color: var(--amber); }
+.mono-red { font-family: var(--font-mono); font-size: 12px; color: var(--red); }
+.mono-purple { font-family: var(--font-mono); font-size: 12px; color: var(--purple); }
+
+/* Phase tags */
+.phase { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.phase-exec { background: var(--red-bg); color: var(--red); }
+.phase-disc { background: var(--amber-bg); color: var(--amber); }
+.phase-coll { background: var(--blue-bg); color: var(--blue); }
+.phase-pers { background: var(--purple-bg); color: var(--purple); }
+.phase-exfil { background: rgba(63,185,80,0.12); color: var(--green); border: 1px solid rgba(63,185,80,0.2); }
+.phase-impact { background: rgba(248,81,73,0.25); color: #ff7070; }
+
+/* Severity */
+.sev { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.sev-crit { background: rgba(248,81,73,0.25); color: #ff4444; }
+.sev-high { background: var(--red-bg); color: var(--red); }
+.sev-med { background: var(--amber-bg); color: var(--amber); }
+.sev-low { background: var(--blue-bg); color: var(--blue); }
+
+/* Code blocks */
+.code-block { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
+.code-block-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #1c2128; border-bottom: 1px solid var(--border); }
+.code-lang { font-size: 11px; font-weight: 600; color: var(--text2); font-family: var(--font-mono); }
+.code-title { font-size: 12px; color: var(--text2); }
+pre { padding: 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.65; }
+.kw { color: #ff7b72; } .str { color: #a5d6ff; } .num { color: #79c0ff; }
+.cmt { color: #8b949e; font-style: italic; }
+.key { color: #e3b341; } .val { color: #7ee787; }
+.field { color: #c9d1d9; }
+.op { color: #ff9f43; }
+.fn { color: #d2a8ff; }
+.prop { color: #79c0ff; }
+
+/* Cards */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.rule-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 24px; overflow: hidden; }
+.rule-card-header { padding: 14px 20px; background: var(--bg3); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: gap; }
+.rule-name { font-size: 14px; font-weight: 600; }
+.rule-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.rule-body { padding: 0; }
+.rule-explain { padding: 16px 20px; font-size: 13px; color: var(--text2); line-height: 1.65; }
+.rule-explain p { margin-bottom: 8px; }
+.rule-explain strong { color: var(--text); }
+
+/* Info boxes */
+.info-box { border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; }
+.info-blue { background: var(--blue-bg); border-left: 3px solid var(--blue); }
+.info-green { background: var(--green-bg); border-left: 3px solid var(--green); }
+.info-amber { background: var(--amber-bg); border-left: 3px solid var(--amber); }
+.info-red { background: var(--red-bg); border-left: 3px solid var(--red); }
+.info-purple { background: var(--purple-bg); border-left: 3px solid var(--purple); }
+
+/* Flow diagram */
+.flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin: 16px 0; }
+.flow-step { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 14px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.flow-arrow { color: var(--text3); padding: 0 8px; font-size: 14px; }
+
+/* Telemetry flow */
+.telem { display: flex; flex-direction: column; gap: 0; max-width: 600px; }
+.telem-step { display: flex; align-items: flex-start; gap: 16px; position: relative; }
+.telem-step:not(:last-child)::before { content: ''; position: absolute; left: 19px; top: 44px; bottom: -8px; width: 2px; background: var(--border); }
+.telem-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; border: 2px solid var(--border); background: var(--bg3); }
+.telem-content { padding-top: 8px; padding-bottom: 16px; }
+.telem-name { font-weight: 600; font-size: 13px; color: var(--text); }
+.telem-desc { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+/* Concept cards */
+.concept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.concept-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; }
+.concept-card .icon { font-size: 22px; margin-bottom: 10px; }
+.concept-card h3 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.concept-card p { font-size: 12px; color: var(--text2); line-height: 1.6; }
+
+/* Tuning section */
+.tuning-item { display: flex; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.tuning-item:last-child { border-bottom: none; }
+.tuning-label { font-size: 12px; font-weight: 600; color: var(--blue); min-width: 140px; }
+.tuning-val { font-size: 12px; color: var(--text2); }
+.tuning-val strong { color: var(--text); }
+
+/* Improvement list */
+.improvement { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
+.improvement .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 6px; }
+.improvement .dot-red { background: var(--red); }
+.improvement p { font-size: 13px; color: var(--text2); }
+.improvement p strong { color: var(--text); }
+
+/* Architecture diagram */
+.arch { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* Print / dividers */
+.divider { height: 1px; background: var(--border); margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<div class="report-header">
+  <h1>🛡️ Blue Team Detection Architecture Report</h1>
+  <p class="subtitle">Insider Threat Lab — PowerShell Abuse / Sysmon / Elastic SIEM / OS Ticket</p>
+  <div class="badges">
+    <span class="badge badge-blue">Detection Engineering</span>
+    <span class="badge badge-red">MITRE ATT&CK Mapping</span>
+    <span class="badge badge-amber">EQL Correlation Rules</span>
+    <span class="badge badge-green">Elastic SIEM Tuning</span>
+    <span class="badge badge-purple">Insider Threat</span>
+    <span class="badge badge-blue">Living-off-the-Land</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SECTION 7: CONCEPTS (đặt đầu làm nền) ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§0</span> Khái Niệm Nền Tảng</div>
+  <div class="concept-grid">
+    <div class="concept-card">
+      <div class="icon">🎭</div>
+      <h3>Insider Threat</h3>
+      <p>Mối đe dọa đến từ <strong>người dùng hợp lệ nội bộ</strong> — nhân viên, contractor, cựu nhân viên — sử dụng quyền truy cập được cấp phép để gây hại. Không cần malware. Không cần exploit. Chỉ cần credential hợp lệ + công cụ hệ thống. Đây là lý do tại sao Insider Threat là <strong>khó phát hiện nhất</strong>: hành vi nhìn "bình thường".</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">🔧</div>
+      <h3>Living-off-the-Land (LOLBins)</h3>
+      <p>Kỹ thuật attacker <strong>chỉ sử dụng công cụ hệ thống hợp pháp</strong> (PowerShell, cmd, reg, certutil, mshta...) để thực hiện attack chain. Không cần upload malware → bypass AV/EDR. LOLBins được dùng vì: đã có sẵn trên Windows, có chữ ký Microsoft, được trust bởi whitelist.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">⚡</div>
+      <h3>PowerShell Abuse</h3>
+      <p>PowerShell là <strong>Swiss Army Knife</strong> của attacker: file enumeration, network request, registry modification, archive creation đều có thể làm qua PS. <code>-ExecutionPolicy Bypass</code> bỏ qua restriction. <code>-EncodedCommand</code> obfuscate command. Đây là lý do PowerShell Logging (Script Block + Command Line) là BẮT BUỘC trong môi trường doanh nghiệp.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">🔬</div>
+      <h3>Detection Engineering</h3>
+      <p>Quá trình <strong>thiết kế, xây dựng và tuning các detection rule</strong> có tính kỹ thuật cao. Không chỉ là "bật Sysmon lên". Detection Engineering bao gồm: phân tích attacker TTP, mapping MITRE, xác định log source, viết rule, đo FP/FN rate, và liên tục cải thiện. Mục tiêu: signal/noise ratio cao nhất có thể.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">🔗</div>
+      <h3>Correlation Rule vs Single Rule</h3>
+      <p><strong>Single rule</strong>: phát hiện một event đơn lẻ (ví dụ: PowerShell chạy). FP cao vì mỗi event riêng lẻ có thể legitimate. <strong>Correlation rule</strong>: yêu cầu một <em>chuỗi event theo thứ tự</em> trong time window. FP thấp hơn nhiều vì xác suất ngẫu nhiên có đủ chuỗi events là rất thấp. Đây là nền tảng của detection behavioral.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">🧠</div>
+      <h3>Behavioral Detection</h3>
+      <p>Thay vì detect signature (hash, IOC cụ thể), behavioral detection focus vào <strong>pattern hành vi</strong>: "ai làm gì, theo thứ tự nào, trong bao lâu". Ưu điểm: phát hiện được zero-day và unknown attacker. Nhược: cần baseline để định nghĩa "bình thường". Đây là hướng phát triển của modern SIEM/XDR.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">🚨</div>
+      <h3>SIEM Alert Pipeline</h3>
+      <p>Log source → <strong>collect</strong> (Elastic Agent) → <strong>parse</strong> (ECS normalization) → <strong>index</strong> (Elasticsearch) → <strong>evaluate</strong> (detection rule chạy theo interval) → <strong>match</strong> → <strong>alert sinh ra</strong> (alert document) → <strong>notify</strong> (webhook/email) → <strong>ticket</strong> (OS Ticket). Mỗi bước đều có thể gây mất alert nếu cấu hình sai.</p>
+    </div>
+    <div class="concept-card">
+      <div class="icon">📋</div>
+      <h3>Elastic ECS (Common Schema)</h3>
+      <p><strong>Elastic Common Schema</strong> là chuẩn field name thống nhất. <code>process.name</code>, <code>process.command_line</code>, <code>file.path</code>, <code>registry.path</code>, <code>network.direction</code> luôn nhất quán dù log đến từ Sysmon hay Endpoint Agent. Detection rule viết theo ECS → portable, không phụ thuộc vào log source cụ thể.</p>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 1: MITRE ATT&CK ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§1</span> Phân Tích MITRE ATT&CK — Attack Chain Mapping</div>
+
+  <div class="info-box info-blue">
+    <strong>Attack Chain:</strong> Execution → Discovery → Collection → Persistence → Exfiltration → Impact<br>
+    <strong>Actor type:</strong> Insider — Valid Account (ituser), non-admin, LOLBins only, no malware<br>
+    <strong>Tactic progression:</strong> Mỗi phase chuẩn bị điều kiện cho phase tiếp theo — không thể đảo thứ tự
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>Tactic (MITRE)</th>
+          <th>Technique ID</th>
+          <th>Sub-Technique</th>
+          <th>Tool / Command</th>
+          <th>Sysmon Event ID</th>
+          <th>Lý do attacker sử dụng</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="phase phase-exec">EXECUTION</span></td>
+          <td>Execution</td>
+          <td><span class="mono">T1059</span></td>
+          <td><span class="mono-green">T1059.001</span><br><small>PowerShell</small></td>
+          <td><span class="mono-amber">powershell.exe -ExecutionPolicy Bypass -File steal.ps1</span></td>
+          <td><span class="mono">EID 1</span><br><small>Process Create</small></td>
+          <td>PowerShell có sẵn trên Windows, bypass execution policy không cần admin, có thể gọi .NET API trực tiếp. <code>-ExecutionPolicy Bypass</code> bỏ qua restriction mà không cần thay đổi global policy.</td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-disc">DISCOVERY</span></td>
+          <td>Discovery</td>
+          <td><span class="mono">T1083</span></td>
+          <td><span class="mono-green">T1083</span><br><small>File &amp; Dir Discovery</small></td>
+          <td><span class="mono-amber">Get-ChildItem C:\Projects -Recurse</span></td>
+          <td><span class="mono">EID 1</span><br><small>Process Create</small></td>
+          <td>Phải biết dữ liệu nằm ở đâu trước khi thu thập. <code>Get-ChildItem</code> là cmdlet hợp pháp, không trigger AV. Cung cấp thông tin về file path, size, timestamp.</td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-coll">COLLECTION</span></td>
+          <td>Collection</td>
+          <td><span class="mono">T1560</span></td>
+          <td><span class="mono-green">T1560.001</span><br><small>Archive via Utility</small></td>
+          <td><span class="mono-amber">Compress-Archive C:\Projects C:\Users\Public\secret.zip</span></td>
+          <td><span class="mono">EID 11</span><br><small>File Create</small></td>
+          <td>Nén dữ liệu giúp giảm kích thước (tăng tốc exfiltration), tạo single file dễ upload. <code>Compress-Archive</code> là built-in PS cmdlet, không cần 7zip hay WinZip. Destination <code>C:\Users\Public\</code> là staging location phổ biến của attacker vì world-writable.</td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-pers">PERSISTENCE</span></td>
+          <td>Persistence</td>
+          <td><span class="mono">T1547</span></td>
+          <td><span class="mono-green">T1547.001</span><br><small>Registry Run Keys</small></td>
+          <td><span class="mono-amber">reg add HKCU\...\Run /v UpdateSvc /t REG_SZ /d "powershell.exe steal.ps1"</span></td>
+          <td><span class="mono">EID 13</span><br><small>Registry Set Value</small></td>
+          <td>Run key tự động thực thi khi user login, không cần admin (HKCU). Tên giả <code>UpdateSvc</code> trông như software update service → bypass human review. Đảm bảo quyền truy cập liên tục kể cả sau khi session kết thúc.</td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-exfil">EXFILTRATION</span></td>
+          <td>Exfiltration / Command &amp; Control</td>
+          <td><span class="mono">T1041</span><br><small>+ T1071.001</small></td>
+          <td><span class="mono-green">T1041</span><br><small>Exfil over C2 Channel</small></td>
+          <td><span class="mono-amber">Invoke-WebRequest http://example.com -UseBasicParsing</span></td>
+          <td><span class="mono">EID 3</span><br><small>Network Connection</small></td>
+          <td>HTTP/HTTPS outbound thường được phép qua firewall. <code>Invoke-WebRequest</code> (alias: <code>iwr</code>, <code>curl</code>, <code>wget</code>) dùng WinHTTP native. <code>-UseBasicParsing</code> bypass IE engine requirement. Traffic trộn lẫn với web browsing bình thường.</td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-impact">IMPACT</span></td>
+          <td>Impact</td>
+          <td><span class="mono">T1485</span></td>
+          <td><span class="mono-green">T1485</span><br><small>Data Destruction</small></td>
+          <td><span class="mono-amber">Remove-Item C:\Projects\* -Recurse -Force</span></td>
+          <td><span class="mono">EID 23</span><br><small>File Delete</small></td>
+          <td>Xóa source data để: (1) che giấu bằng chứng, (2) gây thiệt hại cho tổ chức, (3) cản trở forensics. <code>-Recurse -Force</code> xóa toàn bộ directory tree không cần confirm. Là bước cuối sau khi đã exfiltration xong.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="subsection">
+    <div class="subsection-title">⛓️ Mối Liên Hệ Giữa Các Phase</div>
+    <div class="flow">
+      <div class="flow-step" style="border-color: #f85149; color: #f85149;">⚡ Execution<br><small style="font-weight:400;color:#8b949e;">Tạo môi trường PS</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color: #d29922; color: #d29922;">🔍 Discovery<br><small style="font-weight:400;color:#8b949e;">Locate targets</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color: #58a6ff; color: #58a6ff;">📦 Collection<br><small style="font-weight:400;color:#8b949e;">Stage &amp; archive</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color: #a371f7; color: #a371f7;">🔒 Persistence<br><small style="font-weight:400;color:#8b949e;">Ensure return access</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color: #3fb950; color: #3fb950;">📤 Exfiltration<br><small style="font-weight:400;color:#8b949e;">Send data out</small></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step" style="border-color: #ff4444; color: #ff4444;">💥 Impact<br><small style="font-weight:400;color:#8b949e;">Destroy &amp; cover</small></div>
+    </div>
+    <div class="info-box info-amber" style="margin-top: 12px;">
+      <strong>Dependency logic:</strong> Discovery không thể xảy ra nếu không có Execution. Collection phụ thuộc vào Discovery (cần biết lấy gì). Persistence được đặt sau Collection để đảm bảo backdoor ngay cả khi account bị lock sau khi exfiltration bị phát hiện. Impact chỉ xảy ra sau Exfiltration (phải lấy xong mới xóa).
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 2: LOG SOURCES ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§2</span> Log Source Mapping &amp; ECS Field Audit</div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>MITRE ID</th>
+          <th>Log Source</th>
+          <th>Sysmon Event ID (Correct?)</th>
+          <th>ECS Fields cần dùng</th>
+          <th>Logging config cần bật</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="phase phase-exec">EXECUTION</span></td>
+          <td><span class="mono">T1059.001</span></td>
+          <td>Sysmon<br>Windows Security<br>PowerShell/Operational</td>
+          <td><span class="mono-green">✓ EID 1</span> Process Create<br><span class="badge badge-amber" style="font-size:10px;margin-top:3px;display:inline-block;">+ WinEvent 4104</span></td>
+          <td>
+            <code>process.name</code><br>
+            <code>process.command_line</code><br>
+            <code>process.args</code><br>
+            <code>process.parent.name</code><br>
+            <code>process.parent.executable</code><br>
+            <code>user.name</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 1 (Process Create)<br>
+            ✅ PowerShell Script Block Logging (GPO)<br>
+            ✅ PowerShell Command Line Logging<br>
+            ✅ WinEvent 4688 (Command Line Auditing)<br>
+            ✅ Elastic Agent → Windows integration
+          </td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-disc">DISCOVERY</span></td>
+          <td><span class="mono">T1083</span></td>
+          <td>Sysmon<br>PowerShell/Operational</td>
+          <td><span class="mono-green">✓ EID 1</span> Process Create<br><span class="badge badge-amber" style="font-size:10px;margin-top:3px;display:inline-block;">WinEvent 4104 Script Block</span></td>
+          <td>
+            <code>process.command_line</code><br>
+            <code>process.parent.name</code><br>
+            <code>file.path</code> (target dir)<br>
+            <code>user.name</code><br>
+            <code>host.name</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 1<br>
+            ✅ Script Block Logging (ghi nội dung script)<br>
+            ✅ Elastic Winlogbeat hoặc Elastic Agent Windows<br>
+            ⚠️ Command Line Audit phải enable qua GPO
+          </td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-coll">COLLECTION</span></td>
+          <td><span class="mono">T1560.001</span></td>
+          <td>Sysmon (File + Process)<br>Elastic Endpoint</td>
+          <td><span class="mono-green">✓ EID 11</span> File Create<br><span class="mono-green">✓ EID 1</span> Process Create</td>
+          <td>
+            <code>file.path</code> (output zip)<br>
+            <code>file.name</code><br>
+            <code>file.extension</code><br>
+            <code>process.name</code><br>
+            <code>process.command_line</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 11 (File Create)<br>
+            ✅ Sysmon EID 1 (Process Create)<br>
+            ✅ Elastic Endpoint file creation events<br>
+            ⚠️ Sysmon config phải include <code>&lt;FileCreate&gt;</code> filter<br>
+            ⚠️ Tránh filter quá rộng (miss .zip files)
+          </td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-pers">PERSISTENCE</span></td>
+          <td><span class="mono">T1547.001</span></td>
+          <td>Sysmon (Registry)</td>
+          <td><span class="mono-green">✓ EID 13</span> Registry Value Set<br><small>EID 12 = Create/Delete<br>EID 13 = Value Set ✓</small></td>
+          <td>
+            <code>registry.path</code><br>
+            <code>registry.value</code><br>
+            <code>registry.data.strings</code><br>
+            <code>process.name</code> (who modified)<br>
+            <code>user.name</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 13 (RegistryEvent Value Set)<br>
+            ✅ Sysmon config phải include <code>&lt;RegistryEvent&gt;</code><br>
+            ⚠️ Phải filter HKCU\...\Run specifically<br>
+            ⚠️ Nhiều software cũng write Run key → cần filter
+          </td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-exfil">EXFILTRATION</span></td>
+          <td><span class="mono">T1041</span></td>
+          <td>Sysmon (Network)<br>Elastic Endpoint network</td>
+          <td><span class="mono-green">✓ EID 3</span> Network Connection<br><small>Initiated by powershell.exe</small></td>
+          <td>
+            <code>process.name</code><br>
+            <code>destination.ip</code><br>
+            <code>destination.port</code><br>
+            <code>network.direction</code> (egress)<br>
+            <code>network.transport</code><br>
+            <code>destination.domain</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 3 (NetworkConnect)<br>
+            ✅ Sysmon config: <code>&lt;NetworkConnect onmatch="exclude"&gt;</code><br>
+            ⚠️ EID 3 rất nhiều traffic → phải filter by process<br>
+            ⚠️ Cần DNS logging (EID 22) nếu dùng domain
+          </td>
+        </tr>
+        <tr>
+          <td><span class="phase phase-impact">IMPACT</span></td>
+          <td><span class="mono">T1485</span></td>
+          <td>Sysmon (File Delete)</td>
+          <td><span class="mono-green">✓ EID 23</span> File Delete<br><span class="badge badge-red" style="font-size:10px;display:inline-block;margin-top:3px;">Report gốc dùng process.command_line — SAI</span></td>
+          <td>
+            <code>file.path</code> (deleted file)<br>
+            <code>file.name</code><br>
+            <code>process.name</code> (who deleted)<br>
+            <code>process.command_line</code><br>
+            <code>user.name</code>
+          </td>
+          <td>
+            ✅ Sysmon EID 23 (FileDelete) — cần bật trong config<br>
+            ✅ Sysmon EID 26 (FileDeleteDetected)<br>
+            ⚠️ EID 23 phải explicitly enable trong sysmon config<br>
+            ⚠️ Chỉ capture file bị xóa khi process kết thúc
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="info-box info-red">
+    <strong>🚨 Lỗi Critical trong báo cáo gốc:</strong><br>
+    Rule Impact sử dụng <code>process.command_line : "Remove-Item"</code> để detect file deletion. Đây là cách FP cực cao và KHÔNG detect được EID 23. Cần dùng Sysmon Event ID 23 (<code>event.code: "23"</code>) kết hợp <code>file.path</code> để detect file deletion chính xác. Ngoài ra, Impact rule cần <code>-Recurse</code> flag để phân biệt với deletion thông thường.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 3: OPTIMIZED DETECTION RULES ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§3</span> Detection Rules Tối Ưu</div>
+
+  <!-- RULE 1 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🔴 Rule 1 — PowerShell Suspicious Execution (Execution Phase)</div>
+        <div class="rule-meta">
+          <span class="mono">T1059.001</span>
+          <span class="sev sev-high">HIGH</span>
+          <span class="badge badge-blue">risk_score: 65</span>
+          <span class="badge badge-green">EQL + KQL</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 1 — PowerShell Execution Detection (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"Suspicious PowerShell Execution — ExecutionPolicy Bypass"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects PowerShell launched with bypass flags commonly used by insiders and attackers. Filters known admin tools to reduce FP."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">65</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.process*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>,
+    <span class="str">"winlogbeat-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    process where event.type == "start"
+      and process.name like~ "powershell.exe"
+      and (
+        process.command_line like~ "*-ExecutionPolicy Bypass*"
+        or process.command_line like~ "*-ExecutionPolicy Unrestricted*"
+        or process.command_line like~ "*-ep bypass*"
+        or process.command_line like~ "*-enc *"
+        or process.command_line like~ "*-EncodedCommand*"
+        or process.command_line like~ "*-noprofile*"
+        or process.command_line like~ "*-windowstyle hidden*"
+        or process.command_line like~ "*-w hidden*"
+      )
+      and not (
+        process.parent.name like~ "msiexec.exe"
+        or process.parent.name like~ "svchost.exe"
+        or process.parent.name like~ "services.exe"
+        or process.parent.executable like~ "*\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe"
+        or process.args like~ "*Microsoft*Update*"
+      )
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"max_signals"</span>: <span class="num">100</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Execution"</span>, <span class="str">"MITRE T1059.001"</span>,
+    <span class="str">"LOLBins"</span>, <span class="str">"PowerShell"</span>, <span class="str">"Insider Threat"</span>
+  ],
+  <span class="key">"threat"</span>: [{
+    <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>,
+    <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0002"</span>, <span class="key">"name"</span>: <span class="str">"Execution"</span> },
+    <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1059"</span>, <span class="key">"name"</span>: <span class="str">"Command and Scripting Interpreter"</span>,
+      <span class="key">"subtechnique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1059.001"</span>, <span class="key">"name"</span>: <span class="str">"PowerShell"</span> }]
+    }]
+  }]
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện PowerShell được khởi chạy với các flags dùng để bypass execution policy hoặc ẩn hoạt động. Đây là dấu hiệu attacker đang sử dụng LOLBins technique.</p>
+        <p><strong>📈 Cải tiến so với bản gốc:</strong> Rule gốc chỉ dùng KQL <code>process.name : "powershell.exe" AND process.command_line : "ExecutionPolicy"</code> — quá đơn giản, FP cao. Bản tối ưu dùng EQL với <code>event.type == "start"</code>, thêm nhiều bypass variants (<code>-ep bypass</code>, <code>-enc</code>, <code>-w hidden</code>), và exclude known legitimate parents.</p>
+        <p><strong>⚠️ False Positive khả năng:</strong> IT admin scripts dùng -ExecutionPolicy Bypass để chạy maintenance scripts. Mitigation: thêm user.name whitelist hoặc host.name whitelist cho admin machines.</p>
+        <p><strong>📁 Index:</strong> Ưu tiên <code>logs-endpoint.events.process*</code> (Elastic Endpoint) vì đã normalize theo ECS. Fallback sang <code>logs-windows.sysmon_operational-*</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE 2 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🟡 Rule 2 — Sensitive Directory Enumeration (Discovery Phase)</div>
+        <div class="rule-meta">
+          <span class="mono">T1083</span>
+          <span class="sev sev-med">MEDIUM</span>
+          <span class="badge badge-blue">risk_score: 45</span>
+          <span class="badge badge-amber">Context-aware</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 2 — Directory Discovery via PowerShell (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"PowerShell Sensitive Directory Enumeration"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects PowerShell Get-ChildItem targeting sensitive directories. Standalone FP is high; most useful in correlation context."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">45</span>,
+  <span class="key">"severity"</span>: <span class="str">"medium"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.process*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    process where event.type == "start"
+      and process.name like~ "powershell.exe"
+      and process.command_line like~ "*Get-ChildItem*"
+      and (
+        process.command_line like~ "*-Recurse*"
+        or process.command_line like~ "*-r *"
+      )
+      and (
+        process.command_line like~ "*C:\\\\Users\\\\*"
+        or process.command_line like~ "*C:\\\\Projects*"
+        or process.command_line like~ "*C:\\\\Confidential*"
+        or process.command_line like~ "*\\\\\\\\*"
+        or process.command_line like~ "*AppData*"
+        or process.command_line like~ "*.txt*"
+        or process.command_line like~ "*.docx*"
+        or process.command_line like~ "*.xlsx*"
+        or process.command_line like~ "*.pdf*"
+      )
+      and not process.parent.name like~ "explorer.exe"
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Discovery"</span>, <span class="str">"MITRE T1083"</span>,
+    <span class="str">"PowerShell"</span>, <span class="str">"File Enumeration"</span>
+  ],
+  <span class="key">"note"</span>: <span class="str">"Low-fidelity standalone. Most effective as part of correlation sequence. Consider adjusting risk_score based on user role."</span>
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện việc liệt kê thư mục nhạy cảm qua PowerShell với <code>-Recurse</code>. Standalone signal yếu, nhưng trong chuỗi correlation thì rất có giá trị.</p>
+        <p><strong>📈 Cải tiến:</strong> Rule gốc dùng <code>Get-ChildItem OR dir</code> — cực kỳ FP, hàng ngàn event mỗi ngày. Bản tối ưu yêu cầu <strong>cả</strong> <code>Get-ChildItem</code> <strong>AND</strong> <code>-Recurse</code> <strong>AND</strong> target là sensitive path (C:\Users, C:\Projects, shares). Exclude explorer.exe parent (file manager normal operation).</p>
+        <p><strong>⚠️ False Positive:</strong> Trung bình. Dev/Ops script hợp lệ cũng recurse qua C:\Users. Giảm FP bằng cách kết hợp với Rule 1 trong correlation.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE 3 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🔵 Rule 3 — Data Staging via Archive Creation (Collection Phase)</div>
+        <div class="rule-meta">
+          <span class="mono">T1560.001</span>
+          <span class="sev sev-high">HIGH</span>
+          <span class="badge badge-blue">risk_score: 70</span>
+          <span class="badge badge-green">EID 11 + EID 1</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 3 — Archive Creation in Suspicious Location (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"PowerShell Archive Creation in Staging Location"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects Compress-Archive writing zip files to world-writable or temp locations. Higher fidelity than command-line only detection."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">70</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.process*"</span>,
+    <span class="str">"logs-endpoint.events.file*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    sequence by host.name, user.name with maxspan=2m
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and process.command_line like~ "*Compress-Archive*"
+        and (
+          process.command_line like~ "*C:\\\\Users\\\\Public\\\\*"
+          or process.command_line like~ "*C:\\\\Temp\\\\*"
+          or process.command_line like~ "*C:\\\\Windows\\\\Temp\\\\*"
+          or process.command_line like~ "*%TEMP%*"
+          or process.command_line like~ "*%APPDATA%*"
+        )
+      ]
+      [file where event.type in ("creation", "change")
+        and file.extension in ("zip", "7z", "rar", "tar", "gz")
+        and (
+          file.path like~ "*\\\\Public\\\\*"
+          or file.path like~ "*\\\\Temp\\\\*"
+          or file.path like~ "*\\\\AppData\\\\Roaming\\\\*"
+        )
+      ]
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Collection"</span>, <span class="str">"MITRE T1560.001"</span>,
+    <span class="str">"Data Staging"</span>, <span class="str">"Archive"</span>
+  ]
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện tạo archive trong các staging location phổ biến của attacker. Kết hợp cả process event (EID 1) VÀ file creation event (EID 11) để tăng fidelity.</p>
+        <p><strong>📈 Cải tiến:</strong> Rule gốc chỉ match <code>process.command_line : "Compress-Archive"</code> — người dùng bình thường cũng zip files. Bản tối ưu yêu cầu destination phải là staging path (<code>C:\Public</code>, <code>C:\Temp</code>) VÀ xác nhận file .zip thực sự được tạo (EID 11). Sử dụng mini-sequence theo <code>user.name</code> trong 2 phút.</p>
+        <p><strong>⚠️ False Positive:</strong> Thấp-Trung bình. Người dùng hiếm khi zip vào C:\Public. IT tools đôi khi backup vào Temp — cần whitelist process.parent nếu cần.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE 4 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🟣 Rule 4 — Registry Run Key Persistence (Persistence Phase)</div>
+        <div class="rule-meta">
+          <span class="mono">T1547.001</span>
+          <span class="sev sev-high">HIGH</span>
+          <span class="badge badge-blue">risk_score: 80</span>
+          <span class="badge badge-red">EID 13 — Registry Set</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 4 — Suspicious Run Key with Script Interpreter (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"Registry Run Key Pointing to Script Interpreter"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects Run key registry values containing script interpreters (powershell, cmd, wscript, cscript, mshta). Filters known legitimate software to reduce FP."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">80</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.registry*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    registry where event.type == "change"
+      and registry.path like~ (
+        "*\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\*",
+        "*\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\*",
+        "*\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\*"
+      )
+      and registry.data.strings like~ (
+        "*powershell*",
+        "*cmd.exe*",
+        "*wscript*",
+        "*cscript*",
+        "*mshta*",
+        "*rundll32*",
+        "*regsvr32*",
+        "*.ps1*",
+        "*.vbs*",
+        "*.bat*",
+        "*.hta*"
+      )
+      and not (
+        registry.value in (
+          "SecurityHealth",
+          "WindowsDefender",
+          "OneDrive",
+          "Teams",
+          "Spotify",
+          "Discord"
+        )
+      )
+      and not process.name in ("msiexec.exe", "setup.exe", "install.exe")
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Persistence"</span>, <span class="str">"MITRE T1547.001"</span>,
+    <span class="str">"Registry"</span>, <span class="str">"Run Key"</span>
+  ]
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện Run key chứa script interpreter — dấu hiệu rõ ràng của persistence mechanism. Không phải software hợp lệ nào cũng cần powershell.exe trong Run key.</p>
+        <p><strong>📈 Cải tiến:</strong> Rule gốc dùng <code>registry.path : "*\\Run*"</code> — quá broad, mọi phần mềm cài đặt đều write vào Run key. Bản tối ưu lọc theo <code>registry.data.strings</code> (nội dung value) phải chứa interpreter (powershell, cmd, wscript). Exclude known legitimate apps. Sử dụng EID 13 (Registry Value Set) thay vì chỉ dựa vào process.command_line.</p>
+        <p><strong>⚠️ False Positive:</strong> Thấp. Run key với powershell.exe là rất bất thường trong môi trường doanh nghiệp. Cần tuning theo environment cụ thể (add legitimate apps vào exclusion list).</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE 5 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🟢 Rule 5 — Non-Browser HTTP Outbound from PowerShell (Exfiltration)</div>
+        <div class="rule-meta">
+          <span class="mono">T1041</span>
+          <span class="sev sev-high">HIGH</span>
+          <span class="badge badge-blue">risk_score: 78</span>
+          <span class="badge badge-green">EID 3 — Network</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 5 — PowerShell Outbound HTTP/HTTPS (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"PowerShell Outbound HTTP — Potential Data Exfiltration"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects PowerShell initiating outbound HTTP/HTTPS connections. High fidelity when combined with prior staging activity. Filters known update endpoints."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">78</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.network*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    network where event.type == "start"
+      and process.name like~ "powershell.exe"
+      and network.direction == "egress"
+      and destination.port in (80, 443, 8080, 8443)
+      and not destination.ip in (
+        "127.0.0.1", "::1"
+      )
+      and not destination.domain like~ (
+        "*.windowsupdate.com",
+        "*.microsoft.com",
+        "*.windows.com",
+        "ctldl.windowsupdate.com",
+        "*.digicert.com",
+        "*.symantec.com"
+      )
+      and not (
+        process.parent.name like~ "svchost.exe"
+        and process.parent.args like~ "netsvcs"
+      )
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Exfiltration"</span>, <span class="str">"MITRE T1041"</span>,
+    <span class="str">"PowerShell"</span>, <span class="str">"Network"</span>, <span class="str">"LOLBins"</span>
+  ]
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện PowerShell kết nối ra ngoài qua HTTP/HTTPS. Standalone rule có FP trung bình (IT scripts cũng dùng Invoke-WebRequest), nhưng trong correlation context với staging activity thì confidence rất cao.</p>
+        <p><strong>📈 Cải tiến:</strong> Rule gốc chỉ check <code>process.command_line : "Invoke-WebRequest"</code> — bỏ sót các alias (<code>iwr</code>, <code>wget</code>, <code>curl</code>) và không detect nếu connection được thực hiện qua .NET WebClient trực tiếp. Bản tối ưu dùng <strong>network event</strong> (EID 3) để detect actual connection, không phụ thuộc vào command_line parsing. Exclude Microsoft/Windows update domains.</p>
+        <p><strong>⚠️ False Positive:</strong> Trung bình. Nhiều automation scripts dùng PS để call APIs. Giảm FP bằng cách yêu cầu correlation với Rule 3 (archive) trước.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE 6 -->
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🔴 Rule 6 — Mass Recursive File Deletion (Impact Phase)</div>
+        <div class="rule-meta">
+          <span class="mono">T1485</span>
+          <span class="sev sev-high">HIGH</span>
+          <span class="badge badge-blue">risk_score: 75</span>
+          <span class="badge badge-red">EID 23 — File Delete</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">JSON</span><span class="code-title">Rule 6 — Suspicious Recursive File Deletion (Optimized)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"PowerShell Recursive File Deletion — Data Destruction"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects mass recursive deletion via PowerShell Remove-Item with -Recurse flag targeting user/project directories. Uses file delete events (EID 23) not just process cmdline."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">75</span>,
+  <span class="key">"severity"</span>: <span class="str">"high"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.file*"</span>,
+    <span class="str">"logs-endpoint.events.process*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    sequence by host.name, user.name with maxspan=3m
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and process.command_line like~ "*Remove-Item*"
+        and process.command_line like~ "*-Recurse*"
+        and (
+          process.command_line like~ "*C:\\\\Users\\\\*"
+          or process.command_line like~ "*C:\\\\Projects*"
+          or process.command_line like~ "*\\\\*\\\\*"
+        )
+      ]
+      [file where event.type == "deletion"
+        and process.name like~ "powershell.exe"
+        and (
+          file.extension in ("txt", "docx", "xlsx", "pdf", "ps1", "py", "java", "cs", "cpp", "sql")
+          or file.path like~ "*C:\\\\Projects*"
+          or file.path like~ "*C:\\\\Users\\\\*\\\\Documents\\\\*"
+        )
+      ]
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-6m"</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Impact"</span>, <span class="str">"MITRE T1485"</span>,
+    <span class="str">"Data Destruction"</span>, <span class="str">"File Delete"</span>
+  ],
+  <span class="key">"note"</span>: <span class="str">"Requires Sysmon EID 23 (FileDelete) to be enabled in Sysmon config. Check: <FileDelete onmatch='include'> in sysmonconfig.xml"</span>
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Mục đích:</strong> Phát hiện xóa đệ quy nhiều file quan trọng qua PowerShell. Đây là hành vi Data Destruction đặc trưng của insider angry/departing.</p>
+        <p><strong>📈 Cải tiến critical:</strong> Rule gốc dùng <code>process.command_line : "Remove-Item" OR "del"</code> — <strong>sai nghiêm trọng</strong>. <code>Remove-Item</code> và <code>del</code> là lệnh cực kỳ phổ biến, gây hàng nghìn FP/ngày. Bản tối ưu: (1) yêu cầu <code>-Recurse</code> flag, (2) target phải là user/project directory, (3) xác nhận file deletion thực sự xảy ra qua EID 23, (4) check file extension là file quan trọng.</p>
+        <p><strong>⚠️ False Positive:</strong> Thấp khi yêu cầu đủ điều kiện. Cần Sysmon config bật EID 23.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 4: CORRELATION RULE ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§4</span> Correlation Rule — Full Attack Chain (EQL Sequence)</div>
+
+  <div class="info-box info-red" style="margin-bottom:16px;">
+    <strong>🚨 Lỗi trong Correlation Rule gốc:</strong>
+    <ul style="margin-top:8px;padding-left:20px;font-size:12px;line-height:1.7;">
+      <li>Wildcard trong EQL registry cần dùng <code>like~</code> syntax, không phải KQL-style <code>: "*...*"</code></li>
+      <li>Thiếu <code>by user.name</code> — chỉ group theo host.name dễ bị bypass nếu attacker switch user</li>
+      <li>maxspan=30m quá ngắn — insider attack thực tế có thể kéo dài vài giờ</li>
+      <li>Rule gốc không sinh alert vì index pattern <code>logs-*</code> không match <code>logs-windows.sysmon_operational-*</code></li>
+      <li>Không có <code>event.type</code> filter → match cả update/create/delete events lẫn nhau</li>
+    </ul>
+  </div>
+
+  <div class="rule-card">
+    <div class="rule-card-header">
+      <div>
+        <div class="rule-name">🔴 Correlation Rule — Insider Attack Full Kill Chain</div>
+        <div class="rule-meta">
+          <span class="sev sev-crit">CRITICAL</span>
+          <span class="badge badge-red">risk_score: 99</span>
+          <span class="badge badge-blue">EQL Sequence — maxspan: 2h</span>
+          <span class="badge badge-purple">6-stage sequence</span>
+        </div>
+      </div>
+    </div>
+    <div class="rule-body">
+      <div class="code-block">
+        <div class="code-block-header"><span class="code-lang">EQL</span><span class="code-title">Insider Attack Full Kill Chain — Optimized Correlation (importable JSON)</span></div>
+        <pre>{
+  <span class="key">"name"</span>: <span class="str">"[CRITICAL] Insider Threat — Full PowerShell Kill Chain Detected"</span>,
+  <span class="key">"description"</span>: <span class="str">"Detects the complete insider threat attack chain: PS bypass → file discovery → archive staging → persistence → data exfiltration → file deletion. All events must occur from the same host AND same user within 2 hours. High-confidence, low-FP behavioral detection."</span>,
+  <span class="key">"risk_score"</span>: <span class="num">99</span>,
+  <span class="key">"severity"</span>: <span class="str">"critical"</span>,
+  <span class="key">"type"</span>: <span class="str">"eql"</span>,
+  <span class="key">"language"</span>: <span class="str">"eql"</span>,
+  <span class="key">"index"</span>: [
+    <span class="str">"logs-endpoint.events.process*"</span>,
+    <span class="str">"logs-endpoint.events.file*"</span>,
+    <span class="str">"logs-endpoint.events.registry*"</span>,
+    <span class="str">"logs-endpoint.events.network*"</span>,
+    <span class="str">"logs-windows.sysmon_operational-*"</span>
+  ],
+  <span class="key">"query"</span>: <span class="str">"""
+    sequence by host.name, user.name with maxspan=2h
+
+      /* ── PHASE 1: EXECUTION ── PowerShell bypass */
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and (
+          process.command_line like~ "*-ExecutionPolicy Bypass*"
+          or process.command_line like~ "*-ep bypass*"
+          or process.command_line like~ "*-EncodedCommand*"
+          or process.command_line like~ "*-windowstyle hidden*"
+        )
+      ]
+
+      /* ── PHASE 2: DISCOVERY ── Recursive file enumeration */
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and process.command_line like~ "*Get-ChildItem*"
+        and process.command_line like~ "*-Recurse*"
+      ]
+
+      /* ── PHASE 3: COLLECTION ── Archive creation */
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and process.command_line like~ "*Compress-Archive*"
+      ]
+
+      /* ── PHASE 4: PERSISTENCE ── Registry Run key */
+      [registry where event.type == "change"
+        and registry.path like~ "*\\CurrentVersion\\Run\\*"
+        and registry.data.strings like~ (
+          "*powershell*", "*cmd.exe*",
+          "*wscript*", "*.ps1*", "*.bat*"
+        )
+      ]
+
+      /* ── PHASE 5: EXFILTRATION ── Outbound network from PS */
+      [network where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and network.direction == "egress"
+        and destination.port in (80, 443, 8080, 8443)
+        and not destination.ip == "127.0.0.1"
+      ]
+
+      /* ── PHASE 6: IMPACT ── Recursive deletion */
+      [process where event.type == "start"
+        and process.name like~ "powershell.exe"
+        and process.command_line like~ "*Remove-Item*"
+        and process.command_line like~ "*-Recurse*"
+      ]
+  """</span>,
+  <span class="key">"interval"</span>: <span class="str">"5m"</span>,
+  <span class="key">"from"</span>: <span class="str">"now-2h"</span>,
+  <span class="key">"max_signals"</span>: <span class="num">5</span>,
+  <span class="key">"enabled"</span>: <span class="kw">true</span>,
+  <span class="key">"tags"</span>: [
+    <span class="str">"Correlation"</span>, <span class="str">"Insider Threat"</span>,
+    <span class="str">"Full Kill Chain"</span>, <span class="str">"CRITICAL"</span>,
+    <span class="str">"PowerShell"</span>, <span class="str">"LOLBins"</span>
+  ],
+  <span class="key">"actions"</span>: [{
+    <span class="key">"action_type_id"</span>: <span class="str">".webhook"</span>,
+    <span class="key">"group"</span>: <span class="str">"default"</span>,
+    <span class="key">"params"</span>: {
+      <span class="key">"body"</span>: <span class="str">"CRITICAL: Insider Kill Chain detected on {{context.rule.name}}. Host: {{host.name}}, User: {{user.name}}"</span>
+    }
+  }],
+  <span class="key">"threat"</span>: [
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0002"</span>, <span class="key">"name"</span>: <span class="str">"Execution"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1059"</span>, <span class="key">"subtechnique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1059.001"</span> }] }] },
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0007"</span>, <span class="key">"name"</span>: <span class="str">"Discovery"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1083"</span> }] },
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0009"</span>, <span class="key">"name"</span>: <span class="str">"Collection"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1560"</span>, <span class="key">"subtechnique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1560.001"</span> }] }] },
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0003"</span>, <span class="key">"name"</span>: <span class="str">"Persistence"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1547"</span>, <span class="key">"subtechnique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1547.001"</span> }] }] },
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0010"</span>, <span class="key">"name"</span>: <span class="str">"Exfiltration"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1041"</span> }] },
+    { <span class="key">"framework"</span>: <span class="str">"MITRE ATT&amp;CK"</span>, <span class="key">"tactic"</span>: { <span class="key">"id"</span>: <span class="str">"TA0040"</span>, <span class="key">"name"</span>: <span class="str">"Impact"</span> },
+      <span class="key">"technique"</span>: [{ <span class="key">"id"</span>: <span class="str">"T1485"</span> }] }
+  ]
+}</pre>
+      </div>
+      <div class="rule-explain">
+        <p><strong>🎯 Tại sao cần thứ tự sequence?</strong> EQL sequence yêu cầu event xảy ra <strong>đúng thứ tự</strong>. Không thể có exfiltration trước khi collection, không thể có destruction trước exfiltration. Thứ tự này phản ánh dependency logic thực tế của attack chain → giảm FP cực mạnh vì ngẫu nhiên có đủ 6 events đúng thứ tự trong 2 giờ là gần như không thể.</p>
+        <p><strong>⏱️ Tại sao maxspan=2h?</strong> 30 phút (rule gốc) quá ngắn — insider có thể thực hiện từng bước một cách cẩn thận, dừng lại giữa chừng. 2 giờ đủ để capture attack session đầy đủ trong một ngày làm việc mà không overlap sang ngày hôm sau (tránh cross-day FP).</p>
+        <p><strong>👤 Tại sao group theo cả host.name VÀ user.name?</strong> Chỉ group theo host.name thì multi-user host có thể match events của 2 người khác nhau. Group theo cả 2 đảm bảo tất cả 6 bước phải cùng một người dùng.</p>
+        <p><strong>🔍 Tại sao correlation phát hiện tốt hơn single rule?</strong> Single rule sinh alert cho mỗi bước (Execution → hàng trăm alerts/ngày). Correlation chỉ sinh alert khi TẤT CẢ 6 bước xảy ra — số lượng alert ít hơn nhiều, nhưng confidence cực cao. SOC analyst không bị "alert fatigue".</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 5: ALERT TUNING ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§5</span> Tối Ưu Alert Trên Elastic SIEM</div>
+
+  <div class="card">
+    <div class="card-title">❓ Tại Sao Rule Hiện Tại Không Sinh Alert?</div>
+    <div class="info-box info-red">
+      <strong>Nguyên nhân #1 (Index Pattern):</strong> Rule gốc dùng <code>"index": ["logs-*", "winlogbeat-*"]</code> nhưng Elastic Agent với Sysmon integration ghi log vào <code>logs-windows.sysmon_operational-*</code> hoặc <code>logs-endpoint.events.*</code>. Pattern <code>logs-*</code> <strong>không match</strong> data stream <code>logs-windows.sysmon_operational-default</code> nếu lifecycle policy tạo riêng.
+    </div>
+    <div class="info-box info-amber">
+      <strong>Nguyên nhân #2 (ECS Field Mapping):</strong> Rule dùng <code>process.command_line</code> nhưng data thực tế từ Sysmon có thể ở field <code>winlog.event_data.CommandLine</code> nếu chưa được normalize. Cần verify trong Discover trước khi viết rule.
+    </div>
+    <div class="info-box info-amber">
+      <strong>Nguyên nhân #3 (KQL vs EQL):</strong> Rule gốc dùng <code>type: "query"</code> với <code>language: "kuery"</code> nhưng KQL wildcard <code>: "*..\\.Run*"</code> cho registry path có thể fail vì backslash escaping. EQL với <code>like~</code> xử lý tốt hơn.
+    </div>
+    <div class="info-box info-blue">
+      <strong>Nguyên nhân #4 (lookback window):</strong> Rule dùng <code>"from": "now-5m"</code> với <code>"interval": "5m"</code>. Nếu rule chạy trễ 1 giây, có thể có event "rơi" vào khoảng trống. Best practice: <code>from: now-6m</code> với <code>interval: 5m</code> (1 phút overlap).
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚙️ Best Practice Tuning Parameters</div>
+    <div class="tuning-item"><div class="tuning-label">Index Pattern</div><div class="tuning-val">Dùng <strong>logs-endpoint.events.process*</strong> (Elastic Agent) HOẶC <strong>logs-windows.sysmon_operational-*</strong> (Winlogbeat). Verify trong Discover tab trước. Không dùng <code>logs-*</code> vì quá broad → performance issue.</div></div>
+    <div class="tuning-item"><div class="tuning-label">Interval</div><div class="tuning-val"><strong>5m</strong> cho most rules. Correlation rule nên dùng <strong>5m</strong> với <code>from: now-2h</code>. Không dùng interval ngắn hơn 1m (performance). Không dùng quá 15m (detection lag quá lớn).</div></div>
+    <div class="tuning-item"><div class="tuning-label">Lookback Window</div><div class="tuning-val">Luôn đặt <code>from</code> = interval + 1 phút buffer. Ví dụ: interval=5m → from=<strong>now-6m</strong>. Correlation rule: from phải = maxspan. Tránh gap giữa các lần chạy rule.</div></div>
+    <div class="tuning-item"><div class="tuning-label">max_signals</div><div class="tuning-val">Single rules: <strong>100</strong>. Correlation rule: <strong>5-10</strong> (rất ít legitimate alerts). Nếu rule sinh quá nhiều alert → signal là bị nhiễu, cần tuning thêm.</div></div>
+    <div class="tuning-item"><div class="tuning-label">ECS Normalization</div><div class="tuning-val">Verify fields tồn tại: trong Kibana Discover → filter theo index → inspect document. Đảm bảo <code>process.command_line</code>, <code>registry.data.strings</code>, <code>network.direction</code> được populate. Nếu không có → thêm Elastic Integration pipeline.</div></div>
+    <div class="tuning-item"><div class="tuning-label">Rule Type</div><div class="tuning-val">Ưu tiên <strong>EQL</strong> cho tất cả rules (syntax mạnh hơn, hỗ trợ sequence, wildcard chuẩn hơn). KQL chỉ dùng cho simple ad-hoc queries. Threshold rules phù hợp cho anomaly detection (e.g., >50 file deletions trong 5 phút).</div></div>
+    <div class="tuning-item"><div class="tuning-label">Actions / Notifications</div><div class="tuning-val">Kết nối webhook → OS Ticket API để tự động tạo ticket khi alert sinh ra. Cấu hình trong <em>Rule → Actions → Add Action → Webhook</em>. Dùng Mustache template để include host.name, user.name, rule.name trong ticket body.</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 Cách Sửa Để Alert Hoạt Động — Checklist</div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 1:</strong> Vào Kibana → Discover → chọn index <code>logs-windows.sysmon_operational-*</code> → verify có event.code, process.name, process.command_line fields.</p></div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 2:</strong> Vào Security → Rules → chỉnh index pattern của tất cả rules sang index đúng (xem §2). Xóa <code>winlogbeat-*</code> nếu không dùng Winlogbeat.</p></div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 3:</strong> Chuyển tất cả rules từ <code>type: "query" + language: "kuery"</code> sang <code>type: "eql" + language: "eql"</code> với syntax đúng (như §3).</p></div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 4:</strong> Điều chỉnh <code>"from": "now-6m"</code> cho tất cả 5m-interval rules. Correlation rule: <code>"from": "now-2h"</code>.</p></div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 5:</strong> Enable Sysmon EID 23 trong sysmonconfig.xml: thêm <code>&lt;FileDelete onmatch="include"&gt;</code> section. Reinstall Sysmon với config mới.</p></div>
+    <div class="improvement"><div class="dot"></div><p><strong>Step 6:</strong> Test manual: chạy lại attack script → vào Security Alerts → check xem alert có xuất hiện không. Nếu không → check rule execution log (Rule → Last Response).</p></div>
+    <div class="improvement dot-red"><div class="dot dot-red"></div><p><strong>Lỗi phổ biến:</strong> Rule enabled nhưng "Last Response: No results" → data không vào index đúng. Rule "Partial Failure" → EQL syntax error. Rule "Failed" → index permission issue.</p></div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 6: TELEMETRY FLOW ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§6</span> Telemetry Flow — End-to-End</div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <div class="telem">
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#58a6ff;color:#58a6ff;">💻</div>
+        <div class="telem-content">
+          <div class="telem-name">Windows 10 Host (ituser)</div>
+          <div class="telem-desc">Insider chạy PowerShell → thực hiện attack chain. Mọi action tạo ra Windows Event.</div>
+        </div>
+      </div>
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#d29922;color:#d29922;">👁️</div>
+        <div class="telem-content">
+          <div class="telem-name">Sysmon (System Monitor)</div>
+          <div class="telem-desc">Capture chi tiết: EID 1 (process), EID 3 (network), EID 11 (file create), EID 13 (registry), EID 23 (file delete). Ghi vào Windows Event Log channel <code>Microsoft-Windows-Sysmon/Operational</code>.</div>
+        </div>
+      </div>
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#a371f7;color:#a371f7;">📡</div>
+        <div class="telem-content">
+          <div class="telem-name">Elastic Agent (Fleet Managed)</div>
+          <div class="telem-desc">Thu thập logs từ Windows Event Log. Parse và normalize sang ECS format. Gửi lên Elastic Cloud qua HTTPS/TLS. Tạo data stream <code>logs-windows.sysmon_operational-default</code>.</div>
+        </div>
+      </div>
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#3fb950;color:#3fb950;">🔍</div>
+        <div class="telem-content">
+          <div class="telem-name">Elasticsearch (Index)</div>
+          <div class="telem-desc">Index documents vào data stream. ILM (Index Lifecycle Management) quản lý retention. Mapping tự động theo ECS schema. Sẵn sàng để query.</div>
+        </div>
+      </div>
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#f85149;color:#f85149;">⚡</div>
+        <div class="telem-content">
+          <div class="telem-name">Elastic SIEM Detection Engine</div>
+          <div class="telem-desc">Rule scheduler chạy mỗi 5 phút. Query Elasticsearch với EQL/KQL. Match → tạo alert document trong <code>.alerts-security.alerts-default</code> index. Trigger configured actions (webhook, email).</div>
+        </div>
+      </div>
+      <div class="telem-step">
+        <div class="telem-icon" style="border-color:#ff9f43;color:#ff9f43;">🚨</div>
+        <div class="telem-content">
+          <div class="telem-name">Alert → OS Ticket</div>
+          <div class="telem-desc">Webhook action gọi OS Ticket API → tự động tạo ticket với severity, host, user, MITRE tags. SOC analyst nhận ticket → investigate → contain → eradicate → recover.</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">📊 ECS Field Path — Sysmon to SIEM</div>
+        <div class="table-wrap" style="margin-bottom:0;">
+          <table>
+            <thead><tr><th>Sysmon Field</th><th>ECS Field</th><th>Example Value</th></tr></thead>
+            <tbody>
+              <tr><td class="mono-amber">Image</td><td class="mono-green">process.executable</td><td class="mono">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</td></tr>
+              <tr><td class="mono-amber">CommandLine</td><td class="mono-green">process.command_line</td><td class="mono">powershell.exe -ExecutionPolicy Bypass -File steal.ps1</td></tr>
+              <tr><td class="mono-amber">ParentImage</td><td class="mono-green">process.parent.executable</td><td class="mono">C:\Windows\explorer.exe</td></tr>
+              <tr><td class="mono-amber">TargetFilename</td><td class="mono-green">file.path</td><td class="mono">C:\Users\Public\secret.zip</td></tr>
+              <tr><td class="mono-amber">TargetObject</td><td class="mono-green">registry.path</td><td class="mono">HKCU\Software\Microsoft\Windows\CurrentVersion\Run\UpdateSvc</td></tr>
+              <tr><td class="mono-amber">Details</td><td class="mono-green">registry.data.strings</td><td class="mono">powershell.exe steal.ps1</td></tr>
+              <tr><td class="mono-amber">DestinationIp</td><td class="mono-green">destination.ip</td><td class="mono">93.184.216.34</td></tr>
+              <tr><td class="mono-amber">DestinationPort</td><td class="mono-green">destination.port</td><td class="mono">80</td></tr>
+              <tr><td class="mono-amber">User</td><td class="mono-green">user.name</td><td class="mono">WINVM\ituser</td></tr>
+              <tr><td class="mono-amber">Computer</td><td class="mono-green">host.name</td><td class="mono">Windows-VM</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎫 OS Ticket Integration Flow</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;">
+          <p style="margin-bottom:6px;"><span style="color:#58a6ff;font-weight:600;">1. Alert Generated</span> → Elastic SIEM tạo alert document với đầy đủ context (host, user, process, command_line, MITRE tags)</p>
+          <p style="margin-bottom:6px;"><span style="color:#d29922;font-weight:600;">2. Webhook Triggered</span> → Elastic gửi POST request tới OS Ticket API endpoint với JSON payload</p>
+          <p style="margin-bottom:6px;"><span style="color:#a371f7;font-weight:600;">3. Ticket Created</span> → OS Ticket tạo incident ticket với: Title, Severity=High, Assigned Team=SOC, MITRE mapping</p>
+          <p style="margin-bottom:6px;"><span style="color:#3fb950;font-weight:600;">4. SOC Investigation</span> → Analyst review alert context trong Elastic, pivot sang Timeline, correlate events</p>
+          <p style="margin-bottom:6px;"><span style="color:#f85149;font-weight:600;">5. Containment</span> → Disable user account, isolate host, kill PowerShell process, remove Run key</p>
+          <p><span style="color:#ff9f43;font-weight:600;">6. Ticket Resolved</span> → Analyst update ticket với findings, IOCs, lesson learned → Close</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════ SECTION 8: COMPLETE ARCHITECTURE ═══════════════════════ -->
+<div class="section">
+  <div class="section-title"><span class="section-num">§8</span> Kiến Trúc Detection Hoàn Chỉnh — Summary &amp; Recommendations</div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-title">🏗️ Detection Architecture Overview</div>
+    <div class="table-wrap" style="margin-bottom:0;">
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>Component</th><th>Role</th><th>Config Required</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge badge-blue">Data Collection</span></td><td class="mono-green">Sysmon</td><td>Low-level OS telemetry: process, file, registry, network</td><td>SwiftOnSecurity config template; bật EID 23; filter noise</td></tr>
+          <tr><td><span class="badge badge-blue">Data Collection</span></td><td class="mono-green">PowerShell Logging</td><td>Script Block Logging (4104), Module Logging, Command Line</td><td>GPO: Computer Config → Admin Templates → Windows Components → PS</td></tr>
+          <tr><td><span class="badge badge-amber">Transport</span></td><td class="mono-green">Elastic Agent</td><td>Collect, normalize ECS, ship to Elasticsearch</td><td>Fleet policy: Windows integration + Custom Windows Event Logs</td></tr>
+          <tr><td><span class="badge badge-purple">Storage</span></td><td class="mono-green">Elasticsearch</td><td>Index và search log data</td><td>Data stream + ILM policy; Hot/Warm/Cold tiers; index templates</td></tr>
+          <tr><td><span class="badge badge-red">Detection</span></td><td class="mono-green">Elastic SIEM Rules</td><td>6 single rules + 1 correlation rule (§3, §4)</td><td>EQL syntax; correct index patterns; overlap lookback window</td></tr>
+          <tr><td><span class="badge badge-red">Detection</span></td><td class="mono-green">Correlation Engine</td><td>Full kill chain detection qua EQL sequence</td><td>maxspan=2h; by host.name, user.name; MITRE threat tags</td></tr>
+          <tr><td><span class="badge badge-green">Response</span></td><td class="mono-green">OS Ticket</td><td>Incident tracking và workflow</td><td>Webhook integration từ Elastic Actions; API token</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-title">📋 Rule Coverage Matrix — Final State</div>
+    <div class="table-wrap" style="margin-bottom:0;">
+      <table>
+        <thead>
+          <tr><th>Rule</th><th>Phase</th><th>MITRE</th><th>Type</th><th>Severity</th><th>Risk Score</th><th>FP Level</th><th>Sysmon EID</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PowerShell Suspicious Exec</td>
+            <td><span class="phase phase-exec">EXECUTION</span></td>
+            <td><span class="mono">T1059.001</span></td>
+            <td><span class="badge badge-blue">EQL</span></td>
+            <td><span class="sev sev-high">HIGH</span></td>
+            <td><span class="num">65</span></td>
+            <td><span class="badge badge-amber">Medium</span></td>
+            <td><span class="mono">EID 1</span></td>
+          </tr>
+          <tr>
+            <td>Sensitive Dir Enumeration</td>
+            <td><span class="phase phase-disc">DISCOVERY</span></td>
+            <td><span class="mono">T1083</span></td>
+            <td><span class="badge badge-blue">EQL</span></td>
+            <td><span class="sev sev-med">MEDIUM</span></td>
+            <td><span class="num">45</span></td>
+            <td><span class="badge badge-red">Medium-High</span></td>
+            <td><span class="mono">EID 1</span></td>
+          </tr>
+          <tr>
+            <td>Archive Staging Detection</td>
+            <td><span class="phase phase-coll">COLLECTION</span></td>
+            <td><span class="mono">T1560.001</span></td>
+            <td><span class="badge badge-blue">EQL Seq</span></td>
+            <td><span class="sev sev-high">HIGH</span></td>
+            <td><span class="num">70</span></td>
+            <td><span class="badge badge-green">Low-Med</span></td>
+            <td><span class="mono">EID 1+11</span></td>
+          </tr>
+          <tr>
+            <td>Registry Run Key Persistence</td>
+            <td><span class="phase phase-pers">PERSISTENCE</span></td>
+            <td><span class="mono">T1547.001</span></td>
+            <td><span class="badge badge-blue">EQL</span></td>
+            <td><span class="sev sev-high">HIGH</span></td>
+            <td><span class="num">80</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td><span class="mono">EID 13</span></td>
+          </tr>
+          <tr>
+            <td>PS Outbound HTTP Exfil</td>
+            <td><span class="phase phase-exfil">EXFILTRATION</span></td>
+            <td><span class="mono">T1041</span></td>
+            <td><span class="badge badge-blue">EQL</span></td>
+            <td><span class="sev sev-high">HIGH</span></td>
+            <td><span class="num">78</span></td>
+            <td><span class="badge badge-amber">Medium</span></td>
+            <td><span class="mono">EID 3</span></td>
+          </tr>
+          <tr>
+            <td>Recursive File Deletion</td>
+            <td><span class="phase phase-impact">IMPACT</span></td>
+            <td><span class="mono">T1485</span></td>
+            <td><span class="badge badge-blue">EQL Seq</span></td>
+            <td><span class="sev sev-high">HIGH</span></td>
+            <td><span class="num">75</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td><span class="mono">EID 1+23</span></td>
+          </tr>
+          <tr style="background: rgba(248,81,73,0.05);">
+            <td><strong>🔴 CORRELATION — Full Kill Chain</strong></td>
+            <td><span style="font-size:11px;color:var(--text2);">ALL 6 PHASES</span></td>
+            <td><span class="mono">T1059.001<br>T1083<br>T1560.001<br>T1547.001<br>T1041<br>T1485</span></td>
+            <td><span class="badge badge-red">EQL Sequence</span></td>
+            <td><span class="sev sev-crit">CRITICAL</span></td>
+            <td><span class="num" style="color:#f85149;font-size:15px;font-weight:700;">99</span></td>
+            <td><span class="badge badge-green">Very Low</span></td>
+            <td><span class="mono">EID 1,3,11,13,23</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🎯 Khuyến Nghị Bổ Sung (Beyond Lab Scope)</div>
+    <div class="concept-grid">
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#58a6ff;margin-bottom:6px;">📊 User Behavior Analytics (UBA)</div>
+        <p style="font-size:12px;color:var(--text2);">Elastic ML jobs để detect anomalous behavior: user first time accessing path, unusual hours login, spike in file access count. Dùng <code>Anomaly Detection</code> jobs: <em>v3_rare_process_by_host</em>, <em>v3_windows_rare_user_runas_event</em>.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#d29922;margin-bottom:6px;">🌐 DNS Logging</div>
+        <p style="font-size:12px;color:var(--text2);">Bật Sysmon EID 22 (DNS Query) để detect exfiltration over DNS hoặc DGA domains. Thêm vào correlation: DNS query từ powershell.exe to external domain ngay trước network connection.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#a371f7;margin-bottom:6px;">🔐 Privileged Access Monitoring</div>
+        <p style="font-size:12px;color:var(--text2);">Audit Windows Security Event 4648 (explicit credential use), 4624 (logon), 4634 (logoff) để track lateral movement attempt. Insider đôi khi cố escalate privilege.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#3fb950;margin-bottom:6px;">🚫 Constrained Language Mode</div>
+        <p style="font-size:12px;color:var(--text2);">Enable PowerShell Constrained Language Mode qua AppLocker/WDAC để prevent advanced PS abuse. Attacker bypass CLM thường visible trong Script Block logs (WinEvent 4104).</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#f85149;margin-bottom:6px;">📦 DLP Integration</div>
+        <p style="font-size:12px;color:var(--text2);">Kết hợp SIEM alert với Data Loss Prevention solution (Microsoft Purview, Symantec DLP) để detect large file transfer, USB copy, cloud upload. Correlation giữa DLP alert + SIEM rule = highest confidence.</p>
+      </div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:#56d364;margin-bottom:6px;">🔄 Automated Response (SOAR)</div>
+        <p style="font-size:12px;color:var(--text2);">Kết nối Elastic với SOAR (Tines, Splunk SOAR, Palo Alto XSOAR). Critical alert → tự động isolate host (Elastic Endpoint response action), disable AD account, create OS Ticket, notify manager. Giảm MTTR từ giờ xuống phút.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div style="text-align:center;padding:24px 0;font-size:12px;color:var(--text3);border-top:1px solid var(--border);margin-top:24px;">
+  Blue Team Detection Architecture Report — Insider Threat Lab &nbsp;|&nbsp; MITRE ATT&CK Framework &nbsp;|&nbsp; Elastic SIEM &nbsp;|&nbsp; Detection Engineering
+</div>
+
+</div>
+</body>
+</html>
