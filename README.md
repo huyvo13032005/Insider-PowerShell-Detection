@@ -1,11 +1,11 @@
-# 🛡️ Insider Threat Detection — ELK SIEM + Sysmon + MITRE ATT&CK
+#  Insider Threat Detection — ELK SIEM + Sysmon + MITRE ATT&CK
 
 > **Blue Team | Detection Engineering | SOC-Ready**  
 > A complete, production-grade detection repository for identifying insider threat activity using PowerShell abuse, LOLBins, Sysmon telemetry, and Elastic SIEM correlation.
 
 ---
 
-## 📋 Table of Contents
+##  Table of Contents
 
 1. [Project Overview](#project-overview)
 2. [Architecture Diagram](#architecture-diagram)
@@ -24,7 +24,7 @@
 
 ---
 
-## 🎯 Project Overview
+##  Project Overview
 
 This repository simulates and detects a **full insider threat kill chain** executed by a legitimate user (`ituser`) on a Windows endpoint using only built-in system tools — no malware, no exploits.
 
@@ -40,20 +40,20 @@ This repository simulates and detects a **full insider threat kill chain** execu
 
 ### What This Repo Covers
 
-- ✅ 6 attack phases fully mapped to MITRE ATT&CK
-- ✅ 6 individual detection rules (EQL) — one per phase
-- ✅ 1 full kill-chain correlation rule (EQL sequence)
-- ✅ KQL hunt queries for each phase
-- ✅ Sysmon Event ID mapping per technique
-- ✅ Elastic SIEM integration guide
-- ✅ Kibana dashboard templates
-- ✅ Sample log events (JSON)
-- ✅ Index mapping templates
-- ✅ False positive analysis and tuning recommendations
+-  6 attack phases fully mapped to MITRE ATT&CK
+-  6 individual detection rules (EQL) — one per phase
+-  1 full kill-chain correlation rule (EQL sequence)
+-  KQL hunt queries for each phase
+-  Sysmon Event ID mapping per technique
+-  Elastic SIEM integration guide
+-  Kibana dashboard templates
+-  Sample log events (JSON)
+-  Index mapping templates
+-  False positive analysis and tuning recommendations
 
 ---
 
-## 🏗️ Architecture Diagram
+##  Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -105,7 +105,7 @@ This repository simulates and detects a **full insider threat kill chain** execu
 
 ---
 
-## 🔄 Data Flow
+##  Data Flow
 
 ```
 Windows Host
@@ -158,7 +158,7 @@ Windows Host
 
 ---
 
-## 🧠 Detection Strategy
+##  Detection Strategy
 
 ### Philosophy
 
@@ -190,7 +190,7 @@ Layer 3: Full kill chain correlation (high confidence, critical)
 
 ---
 
-## 📁 Repository Structure
+##  Repository Structure
 
 ```
 insider-threat-detection/
@@ -261,7 +261,7 @@ insider-threat-detection/
 
 ---
 
-## 🗺️ MITRE ATT&CK Coverage
+## MITRE ATT&CK Coverage
 
 | Phase | Tactic          | Technique      | Sub-Technique | Tactic ID | Sysmon EID | Rule File                              |
 |-------|-----------------|----------------|---------------|-----------|------------|----------------------------------------|
@@ -278,7 +278,7 @@ insider-threat-detection/
 
 ---
 
-## ⛓️ Kill Chain Phases
+##  Kill Chain Phases
 
 ```
 [Phase 1: Execution]
@@ -309,7 +309,7 @@ insider-threat-detection/
 
 ---
 
-## 🔗 Correlation Logic
+##  Correlation Logic
 
 The correlation rule in `correlation-rules/insider_full_kill_chain.eql` requires:
 
@@ -335,7 +335,7 @@ Time Window: ─────────────────[ 2 HOURS ]─�
 
 ---
 
-## 🔧 ELK Integration
+##  ELK Integration
 
 ### Index Patterns
 
@@ -369,7 +369,7 @@ logs-endpoint.events.network-*      ← Elastic Endpoint network events
 
 ---
 
-## 🔕 False Positive Reduction
+##  False Positive Reduction
 
 | Technique              | FP Source                        | Mitigation Strategy                              |
 |------------------------|----------------------------------|--------------------------------------------------|
@@ -383,7 +383,7 @@ logs-endpoint.events.network-*      ← Elastic Endpoint network events
 
 ---
 
-## 📚 Lessons Learned
+##  Lessons Learned
 
 ### Detection Engineering
 
@@ -407,7 +407,7 @@ logs-endpoint.events.network-*      ← Elastic Endpoint network events
 
 ---
 
-## 💼 SOC Value
+##  SOC Value
 
 | Metric               | Without This Repo          | With This Repo              |
 |----------------------|----------------------------|-----------------------------|
@@ -420,7 +420,7 @@ logs-endpoint.events.network-*      ← Elastic Endpoint network events
 
 ---
 
-## 🎓 Blue Team Learning Outcomes
+##  Blue Team Learning Outcomes
 
 After working through this repository, practitioners will understand:
 
@@ -435,7 +435,7 @@ After working through this repository, practitioners will understand:
 
 ---
 
-## ✅ Conclusion
+##  Conclusion
 
 ### How We Detect Insider Threats
 
